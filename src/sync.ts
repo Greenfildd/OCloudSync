@@ -4,6 +4,12 @@ import type {
   SyncBaseline,
 } from "./types";
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 export type LocalFile = FileEntry;
 
 export interface SyncResult {
@@ -98,11 +104,11 @@ async function runConcurrent<T>(items: T[], concurrency: number, task: (item: T)
       try {
         await task(items[index]);
       } catch (error) {
-        failure = error;
+        failure = error instanceof Error ? error : new Error(String(error));
       }
     }
   }));
-  if (failure !== undefined) throw failure;
+  if (failure instanceof Error) throw failure;
 }
 
 export async function synchronize(
@@ -159,7 +165,7 @@ export async function synchronize(
     const merged = mergeText(baseContent, localText, remoteText);
     if (merged === undefined) return false;
     const bytes = new TextEncoder().encode(merged);
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const buffer = toArrayBuffer(bytes);
     await writeRemote(path, buffer, Date.now());
     await writeLocal(path, buffer);
     result.uploaded++;

@@ -10,6 +10,12 @@ const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
 const encoder = new TextEncoder();
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 function cleanPath(path: string): string {
   const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
   if (parts.some((part) => part === "." || part === "..")) {
@@ -859,7 +865,7 @@ function requestDropboxCode(app: App, authUrl: string): Promise<string> {
 export async function connectDropbox(settings: PluginSettings, app: App): Promise<void> {
   if (!settings.dropboxAppKey.trim()) throw new Error("Enter a Dropbox app key before connecting.");
   const redirectUri = "http://localhost:53683/dropbox-callback";
-  const http = Platform.isMobile ? undefined : require("http") as typeof import("http");
+  const http = Platform.isDesktop ? await import("http") : undefined;
   const verifierBytes = crypto.getRandomValues(new Uint8Array(48));
   const verifier = btoa(String.fromCharCode(...verifierBytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const challengeBytes = await crypto.subtle.digest("SHA-256", encoder.encode(verifier));
@@ -889,15 +895,15 @@ export async function connectDropbox(settings: PluginSettings, app: App): Promis
       const returnedCode = callback.searchParams.get("code");
       if (error || !returnedCode) {
         response.writeHead(400).end("Dropbox sign-in was cancelled. Return to Obsidian.");
-        settled = true; clearTimeout(timeout); server.close();
+        settled = true; window.clearTimeout(timeout); server.close();
         reject(new Error(error ? `Dropbox sign-in failed: ${error}` : "Dropbox did not return an authorization code."));
         return;
       }
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>Dropbox connected. Return to Obsidian.</p>");
-      settled = true; clearTimeout(timeout); server.close(); resolve(returnedCode);
+      settled = true; window.clearTimeout(timeout); server.close(); resolve(returnedCode);
     });
-    const timeout = setTimeout(() => { if (!settled) { settled = true; server.close(); reject(new Error("Dropbox sign-in timed out.")); } }, 5 * 60_000);
-    server.once("error", (error) => { if (!settled) { settled = true; clearTimeout(timeout); reject(new Error(`Could not start Dropbox sign-in: ${error.message}`)); } });
+    const timeout = window.setTimeout(() => { if (!settled) { settled = true; server.close(); reject(new Error("Dropbox sign-in timed out.")); } }, 5 * 60_000);
+    server.once("error", (error) => { if (!settled) { settled = true; window.clearTimeout(timeout); reject(new Error(`Could not start Dropbox sign-in: ${error.message}`)); } });
     server.listen(53683, "127.0.0.1", () => window.open(authUrl.toString()));
   });
   const response = await requestUrl({
@@ -1118,7 +1124,7 @@ async function connectOneDriveMobile(settings: PluginSettings, app: App): Promis
 export async function connectOneDrive(settings: PluginSettings, app: App): Promise<void> {
   if (!settings.oneDriveClientId.trim()) throw new Error("Enter a Microsoft application client ID before connecting.");
   if (Platform.isMobile) return connectOneDriveMobile(settings, app);
-  const http = require("http") as typeof import("http");
+  const http = await import("http");
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(48))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const challengeBytes = await crypto.subtle.digest("SHA-256", encoder.encode(verifier));
   const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -1133,30 +1139,30 @@ export async function connectOneDrive(settings: PluginSettings, app: App): Promi
       if (url.pathname !== "/") { response.writeHead(404).end("Not found."); return; }
       if (url.searchParams.get("state") !== state) {
         response.writeHead(400).end("OAuth state mismatch.");
-        settled = true; clearTimeout(timeout); server.close(); reject(new Error("Microsoft sign-in state did not match."));
+        settled = true; window.clearTimeout(timeout); server.close(); reject(new Error("Microsoft sign-in state did not match."));
         return;
       }
       const oauthError = url.searchParams.get("error");
       if (oauthError) {
         response.writeHead(400).end("Microsoft sign-in was cancelled or denied.");
-        settled = true; clearTimeout(timeout); server.close();
+        settled = true; window.clearTimeout(timeout); server.close();
         reject(new Error(url.searchParams.get("error_description") ?? `Microsoft sign-in failed: ${oauthError}`));
         return;
       }
       const code = url.searchParams.get("code");
       if (!code) {
         response.writeHead(400).end("Microsoft did not return a code.");
-        settled = true; clearTimeout(timeout); server.close(); reject(new Error("Microsoft did not return an authorization code."));
+        settled = true; window.clearTimeout(timeout); server.close(); reject(new Error("Microsoft did not return an authorization code."));
         return;
       }
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>OneDrive connected. Return to Obsidian.</p>");
-      settled = true; clearTimeout(timeout); server.close(); resolve({ code, redirectUri });
+      settled = true; window.clearTimeout(timeout); server.close(); resolve({ code, redirectUri });
     });
-    const timeout = setTimeout(() => { if (!settled) { settled = true; server.close(); reject(new Error("Microsoft sign-in timed out.")); } }, 5 * 60_000);
-    server.once("error", (error) => { if (!settled) { settled = true; clearTimeout(timeout); reject(error); } });
+    const timeout = window.setTimeout(() => { if (!settled) { settled = true; server.close(); reject(new Error("Microsoft sign-in timed out.")); } }, 5 * 60_000);
+    server.once("error", (error) => { if (!settled) { settled = true; window.clearTimeout(timeout); reject(error); } });
     server.listen(0, "localhost", () => {
       const address = server.address();
-      if (!address || typeof address === "string") { clearTimeout(timeout); server.close(); reject(new Error("Could not start the Microsoft sign-in callback.")); return; }
+      if (!address || typeof address === "string") { window.clearTimeout(timeout); server.close(); reject(new Error("Could not start the Microsoft sign-in callback.")); return; }
       const redirectUri = `http://localhost:${address.port}`;
       const auth = new URL("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize");
       auth.search = new URLSearchParams({
@@ -1465,7 +1471,7 @@ export class WebdisProvider implements CloudProvider {
     const content = await this.request(this.commandUrl("SET", this.key(path)), "PUT", data);
     assertSuccess(content.status, `Could not write Webdis key for "${path}"`);
     const stamp = encoder.encode(`${mtime}:${data.byteLength}`);
-    const metadata = await this.request(this.commandUrl("SET", this.key(path, true)), "PUT", stamp.buffer as ArrayBuffer);
+    const metadata = await this.request(this.commandUrl("SET", this.key(path, true)), "PUT", toArrayBuffer(stamp));
     assertSuccess(metadata.status, `Could not update Webdis timestamp for "${path}"`);
   }
 
@@ -1625,22 +1631,22 @@ export async function connectBox(settings: PluginSettings): Promise<void> {
   if (!settings.boxClientId.trim() || !settings.boxClientSecret) throw new Error("Enter the Box client ID and client secret first.");
   const redirect = new URL(settings.boxRedirectUri);
   if (redirect.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(redirect.hostname) || !redirect.port) throw new Error("Box redirect URI must be a localhost URL with an explicit port, for example http://localhost:53682/callback.");
-  const http = require("http") as typeof import("http");
+  const http = await import("http");
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const callback = new Promise<string>((resolve, reject) => {
     const server = http.createServer((request, response) => {
       const callbackUrl = new URL(request.url ?? "/", settings.boxRedirectUri);
       if (callbackUrl.pathname !== redirect.pathname) { response.writeHead(404).end("Not found."); return; }
-      if (callbackUrl.searchParams.get("state") !== state) { response.writeHead(400).end("OAuth state mismatch."); clearTimeout(timeout); server.close(); reject(new Error("Box sign-in state did not match.")); return; }
+      if (callbackUrl.searchParams.get("state") !== state) { response.writeHead(400).end("OAuth state mismatch."); window.clearTimeout(timeout); server.close(); reject(new Error("Box sign-in state did not match.")); return; }
       const error = callbackUrl.searchParams.get("error");
-      if (error) { response.writeHead(400).end("Box sign-in was cancelled."); clearTimeout(timeout); server.close(); reject(new Error(`Box sign-in failed: ${error}`)); return; }
+      if (error) { response.writeHead(400).end("Box sign-in was cancelled."); window.clearTimeout(timeout); server.close(); reject(new Error(`Box sign-in failed: ${error}`)); return; }
       const code = callbackUrl.searchParams.get("code");
-      if (!code) { response.writeHead(400).end("Box did not return an authorization code."); clearTimeout(timeout); server.close(); reject(new Error("Box did not return an authorization code.")); return; }
+      if (!code) { response.writeHead(400).end("Box did not return an authorization code."); window.clearTimeout(timeout); server.close(); reject(new Error("Box did not return an authorization code.")); return; }
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>Box connected. Return to Obsidian.</p>");
-      clearTimeout(timeout); server.close(); resolve(code);
+      window.clearTimeout(timeout); server.close(); resolve(code);
     });
-    const timeout = setTimeout(() => { server.close(); reject(new Error("Box sign-in timed out.")); }, 5 * 60_000);
-    server.once("error", (error) => { clearTimeout(timeout); reject(new Error(`Could not open the Box callback listener: ${error.message}`)); });
+    const timeout = window.setTimeout(() => { server.close(); reject(new Error("Box sign-in timed out.")); }, 5 * 60_000);
+    server.once("error", (error) => { window.clearTimeout(timeout); reject(new Error(`Could not open the Box callback listener: ${error.message}`)); });
     server.listen(Number(redirect.port), redirect.hostname, () => {
       const auth = new URL("https://account.box.com/api/oauth2/authorize");
       auth.search = new URLSearchParams({ response_type: "code", client_id: settings.boxClientId.trim(), redirect_uri: settings.boxRedirectUri, state }).toString();
@@ -1695,7 +1701,7 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
     throw new Error("Enter a Google OAuth desktop client ID before connecting.");
   }
 
-  const http = require("http") as typeof import("http");
+  const http = await import("http");
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
@@ -1731,7 +1737,7 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
         if (oauthError) {
           response.writeHead(400).end("Google sign-in was cancelled or denied.");
           settled = true;
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           server.close();
           reject(new Error(`Google sign-in was not completed: ${oauthError}`));
           return;
@@ -1744,11 +1750,11 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         response.end("<p>Google Drive connected. You can close this tab and return to Obsidian.</p>");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         resolve({ code, redirectUri });
       });
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         if (!settled) {
           settled = true;
           server.close();
@@ -1758,14 +1764,14 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
       server.once("error", (error) => {
         if (!settled) {
           settled = true;
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           reject(error);
         }
       });
       server.listen(0, "127.0.0.1", () => {
         const address = server.address();
         if (!address || typeof address === "string") {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           server.close();
           reject(new Error("Could not start the local Google sign-in callback."));
           return;

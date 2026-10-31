@@ -1,7 +1,9 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __export = (target, all2) => {
@@ -16,6 +18,14 @@ var __copyProps = (to, from2, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
@@ -33,6 +43,11 @@ var DRIVE_API = "https://www.googleapis.com/drive/v3";
 var DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 var DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
 var encoder = new TextEncoder();
+function toArrayBuffer(bytes) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 function cleanPath(path) {
   const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
   if (parts.some((part) => part === "." || part === "..")) {
@@ -770,7 +785,7 @@ function requestDropboxCode(app, authUrl) {
 async function connectDropbox(settings, app) {
   if (!settings.dropboxAppKey.trim()) throw new Error("Enter a Dropbox app key before connecting.");
   const redirectUri = "http://localhost:53683/dropbox-callback";
-  const http = import_obsidian.Platform.isMobile ? void 0 : require("http");
+  const http = import_obsidian.Platform.isDesktop ? await import("http") : void 0;
   const verifierBytes = crypto.getRandomValues(new Uint8Array(48));
   const verifier = btoa(String.fromCharCode(...verifierBytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const challengeBytes = await crypto.subtle.digest("SHA-256", encoder.encode(verifier));
@@ -808,18 +823,18 @@ async function connectDropbox(settings, app) {
       if (error || !returnedCode) {
         response2.writeHead(400).end("Dropbox sign-in was cancelled. Return to Obsidian.");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error(error ? `Dropbox sign-in failed: ${error}` : "Dropbox did not return an authorization code."));
         return;
       }
       response2.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>Dropbox connected. Return to Obsidian.</p>");
       settled = true;
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
       server.close();
       resolve(returnedCode);
     });
-    const timeout = setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       if (!settled) {
         settled = true;
         server.close();
@@ -829,7 +844,7 @@ async function connectDropbox(settings, app) {
     server.once("error", (error) => {
       if (!settled) {
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         reject(new Error(`Could not start Dropbox sign-in: ${error.message}`));
       }
     });
@@ -1028,7 +1043,7 @@ async function connectOneDriveMobile(settings, app) {
 async function connectOneDrive(settings, app) {
   if (!settings.oneDriveClientId.trim()) throw new Error("Enter a Microsoft application client ID before connecting.");
   if (import_obsidian.Platform.isMobile) return connectOneDriveMobile(settings, app);
-  const http = require("http");
+  const http = await import("http");
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(48))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const challengeBytes = await crypto.subtle.digest("SHA-256", encoder.encode(verifier));
   const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -1047,7 +1062,7 @@ async function connectOneDrive(settings, app) {
       if (url.searchParams.get("state") !== state) {
         response2.writeHead(400).end("OAuth state mismatch.");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error("Microsoft sign-in state did not match."));
         return;
@@ -1056,7 +1071,7 @@ async function connectOneDrive(settings, app) {
       if (oauthError) {
         response2.writeHead(400).end("Microsoft sign-in was cancelled or denied.");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error(url.searchParams.get("error_description") ?? `Microsoft sign-in failed: ${oauthError}`));
         return;
@@ -1065,18 +1080,18 @@ async function connectOneDrive(settings, app) {
       if (!code2) {
         response2.writeHead(400).end("Microsoft did not return a code.");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error("Microsoft did not return an authorization code."));
         return;
       }
       response2.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>OneDrive connected. Return to Obsidian.</p>");
       settled = true;
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
       server.close();
       resolve({ code: code2, redirectUri: redirectUri2 });
     });
-    const timeout = setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       if (!settled) {
         settled = true;
         server.close();
@@ -1086,14 +1101,14 @@ async function connectOneDrive(settings, app) {
     server.once("error", (error) => {
       if (!settled) {
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         reject(error);
       }
     });
     server.listen(0, "localhost", () => {
       const address = server.address();
       if (!address || typeof address === "string") {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error("Could not start the Microsoft sign-in callback."));
         return;
@@ -1353,7 +1368,7 @@ var WebdisProvider = class {
     const content = await this.request(this.commandUrl("SET", this.key(path)), "PUT", data);
     assertSuccess(content.status, `Could not write Webdis key for "${path}"`);
     const stamp = encoder.encode(`${mtime}:${data.byteLength}`);
-    const metadata = await this.request(this.commandUrl("SET", this.key(path, true)), "PUT", stamp.buffer);
+    const metadata = await this.request(this.commandUrl("SET", this.key(path, true)), "PUT", toArrayBuffer(stamp));
     assertSuccess(metadata.status, `Could not update Webdis timestamp for "${path}"`);
   }
   async delete(path) {
@@ -1494,7 +1509,7 @@ async function connectBox(settings) {
   if (!settings.boxClientId.trim() || !settings.boxClientSecret) throw new Error("Enter the Box client ID and client secret first.");
   const redirect = new URL(settings.boxRedirectUri);
   if (redirect.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(redirect.hostname) || !redirect.port) throw new Error("Box redirect URI must be a localhost URL with an explicit port, for example http://localhost:53682/callback.");
-  const http = require("http");
+  const http = await import("http");
   const state = Array.from(crypto.getRandomValues(new Uint8Array(24))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const callback = new Promise((resolve, reject) => {
     const server = http.createServer((request, response2) => {
@@ -1505,7 +1520,7 @@ async function connectBox(settings) {
       }
       if (callbackUrl.searchParams.get("state") !== state) {
         response2.writeHead(400).end("OAuth state mismatch.");
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error("Box sign-in state did not match."));
         return;
@@ -1513,7 +1528,7 @@ async function connectBox(settings) {
       const error = callbackUrl.searchParams.get("error");
       if (error) {
         response2.writeHead(400).end("Box sign-in was cancelled.");
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error(`Box sign-in failed: ${error}`));
         return;
@@ -1521,22 +1536,22 @@ async function connectBox(settings) {
       const code2 = callbackUrl.searchParams.get("code");
       if (!code2) {
         response2.writeHead(400).end("Box did not return an authorization code.");
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         reject(new Error("Box did not return an authorization code."));
         return;
       }
       response2.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end("<p>Box connected. Return to Obsidian.</p>");
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
       server.close();
       resolve(code2);
     });
-    const timeout = setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       server.close();
       reject(new Error("Box sign-in timed out."));
     }, 5 * 6e4);
     server.once("error", (error) => {
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
       reject(new Error(`Could not open the Box callback listener: ${error.message}`));
     });
     server.listen(Number(redirect.port), redirect.hostname, () => {
@@ -1590,7 +1605,7 @@ async function connectGoogleDrive(settings) {
   if (!settings.googleClientId.trim()) {
     throw new Error("Enter a Google OAuth desktop client ID before connecting.");
   }
-  const http = require("http");
+  const http = await import("http");
   const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((value) => value.toString(16).padStart(2, "0")).join("");
   const challengeBytes = await crypto.subtle.digest("SHA-256", encoder.encode(verifier));
   const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -1618,7 +1633,7 @@ async function connectGoogleDrive(settings) {
         if (oauthError) {
           response2.writeHead(400).end("Google sign-in was cancelled or denied.");
           settled = true;
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           server.close();
           reject(new Error(`Google sign-in was not completed: ${oauthError}`));
           return;
@@ -1631,11 +1646,11 @@ async function connectGoogleDrive(settings) {
         response2.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         response2.end("<p>Google Drive connected. You can close this tab and return to Obsidian.</p>");
         settled = true;
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         server.close();
         resolve({ code: code2, redirectUri: redirectUri2 });
       });
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         if (!settled) {
           settled = true;
           server.close();
@@ -1645,14 +1660,14 @@ async function connectGoogleDrive(settings) {
       server.once("error", (error) => {
         if (!settled) {
           settled = true;
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           reject(error);
         }
       });
       server.listen(0, "127.0.0.1", () => {
         const address = server.address();
         if (!address || typeof address === "string") {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           server.close();
           reject(new Error("Could not start the local Google sign-in callback."));
           return;
@@ -1701,6 +1716,11 @@ async function connectGoogleDrive(settings) {
 }
 
 // src/sync.ts
+function toArrayBuffer2(bytes) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 function diffLines(base, changed) {
   const n = base.length;
   const m = changed.length;
@@ -1781,11 +1801,11 @@ async function runConcurrent(items, concurrency, task) {
       try {
         await task(items[index]);
       } catch (error) {
-        failure = error;
+        failure = error instanceof Error ? error : new Error(String(error));
       }
     }
   }));
-  if (failure !== void 0) throw failure;
+  if (failure instanceof Error) throw failure;
 }
 async function synchronize(localFiles, remoteFiles, baseline, readRemote, readLocal, writeRemote, writeLocal, refresh, conflictAction = "keep-newer", deleteRemote, deleteLocal, syncDeletions = true, shouldCancel = () => false, concurrency = 5) {
   const localByPath = new Map(localFiles.map((file) => [file.path, file]));
@@ -1822,7 +1842,7 @@ async function synchronize(localFiles, remoteFiles, baseline, readRemote, readLo
     const merged = mergeText(baseContent, localText, remoteText);
     if (merged === void 0) return false;
     const bytes = new TextEncoder().encode(merged);
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const buffer = toArrayBuffer2(bytes);
     await writeRemote(path, buffer, Date.now());
     await writeLocal(path, buffer);
     result.uploaded++;
@@ -1991,6 +2011,11 @@ var OPENSSL_MAGIC = new Uint8Array([83, 97, 108, 116, 101, 100, 95, 95]);
 var OPENSSL_PATH_PREFIX = "~ossl~";
 var OPENSSL_ITERATIONS = 2e4;
 var pathKeys;
+function toArrayBuffer3(bytes) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 function webCrypto() {
   if (!window.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
   return window.crypto;
@@ -1998,7 +2023,7 @@ function webCrypto() {
 async function deriveKey(password, salt) {
   const crypto2 = webCrypto();
   const material = await crypto2.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength);
+  const saltBuffer = toArrayBuffer3(salt);
   return crypto2.subtle.deriveKey(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: ITERATIONS },
     material,
@@ -2024,7 +2049,7 @@ async function encryptOpenSsl(data, password) {
   const crypto2 = webCrypto();
   const salt = crypto2.getRandomValues(new Uint8Array(8));
   const material = await crypto2.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength);
+  const saltBuffer = toArrayBuffer3(salt);
   const derived = new Uint8Array(await crypto2.subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: OPENSSL_ITERATIONS },
     material,
@@ -2047,7 +2072,7 @@ async function decryptOpenSsl(data, password) {
   }
   const salt = data.slice(OPENSSL_MAGIC.length, headerLength);
   const material = await webCrypto().subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength);
+  const saltBuffer = toArrayBuffer3(salt);
   const derived = new Uint8Array(await webCrypto().subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: OPENSSL_ITERATIONS },
     material,
@@ -2115,7 +2140,7 @@ async function encryptPath(path, password, method = "aes-gcm") {
     return (await Promise.all(path.split("/").map(async (part) => {
       if (!part) return part;
       const plain = new TextEncoder().encode(part);
-      const encrypted = await encryptOpenSsl(plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength), password);
+      const encrypted = await encryptOpenSsl(toArrayBuffer3(plain), password);
       return `${OPENSSL_PATH_PREFIX}${toBase64Url(new Uint8Array(encrypted))}`;
     }))).join("/");
   }
@@ -2126,9 +2151,9 @@ async function encryptPath(path, password, method = "aes-gcm") {
     const iv = await pathIv(part, mac);
     const encoded = new TextEncoder().encode(part);
     const cipher = new Uint8Array(await webCrypto().subtle.encrypt(
-      { name: "AES-GCM", iv: iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) },
+      { name: "AES-GCM", iv: toArrayBuffer3(iv) },
       enc,
-      encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength)
+      toArrayBuffer3(encoded)
     ));
     const output = new Uint8Array(iv.length + cipher.length);
     output.set(iv);
@@ -10573,7 +10598,9 @@ glo[importIdentifier] = true;
 
 // src/crdt.ts
 function bufferOf(bytes) {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 }
 function replaceText(doc2, nextText) {
   const text2 = doc2.getText("content");
@@ -10676,6 +10703,11 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/main.ts
+function toArrayBuffer4(bytes) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 var MyCloudSyncPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
@@ -11052,7 +11084,7 @@ var MyCloudSyncPlugin = class extends import_obsidian2.Plugin {
           await writeRemoteData(updatePath, merged.update, Date.now());
         }
         const mergedBytes = new TextEncoder().encode(merged.text);
-        const mergedBuffer = mergedBytes.buffer.slice(mergedBytes.byteOffset, mergedBytes.byteOffset + mergedBytes.byteLength);
+        const mergedBuffer = toArrayBuffer4(mergedBytes);
         if (merged.text !== localText) await this.writeLocal(path, mergedBuffer);
         const remoteText = new TextDecoder("utf-8", { fatal: true }).decode(await readRemoteData(path));
         if (merged.text !== remoteText) await writeRemoteData(path, mergedBuffer, Date.now());
@@ -11253,7 +11285,6 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     const pageNav = new import_obsidian2.Setting(containerEl);
     pageNav.settingEl.addClass("ocs-page-nav");
     pageNav.infoEl.hide();
-    pageNav.settingEl.addClass("ocs-page-nav");
     pageNav.addButton((button) => {
       button.setButtonText("Main");
       if (this.currentPage === "main") button.setCta();
@@ -11299,7 +11330,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.displayExport(containerEl);
       return;
     }
-    new import_obsidian2.Setting(containerEl).setName("Main settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("General").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Cloud provider").setDesc("Choose a connected cloud service for this vault.").addDropdown(
       (dropdown) => dropdown.addOption("webdav", "WebDAV (Nextcloud, ownCloud, etc.)").addOption("google-drive", "Google Drive").addOption("s3", "S3-compatible storage (AWS, Cloudflare R2, MinIO, etc.)").addOption("azure-blob", "Azure Blob Storage").addOption("dropbox", "Dropbox").addOption("onedrive", "OneDrive Personal (app folder)").addOption("yandex-disk", "Yandex Disk").addOption("pcloud", "pCloud").addOption("webdis", "Webdis (Redis HTTP gateway)").addOption("box", "Box").setValue(this.plugin.settings.provider).onChange(async (value) => {
         if (value !== "webdav" && value !== "google-drive" && value !== "s3" && value !== "azure-blob" && value !== "dropbox" && value !== "onedrive" && value !== "yandex-disk" && value !== "pcloud" && value !== "webdis" && value !== "box") {
@@ -11351,8 +11382,8 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     pathSyncGroup.addClass("ocs-settings-group");
     for (const [key, title, description] of [
       ["includeUnderscorePaths", "Sync underscore paths", "Include files and folders whose names start with underscore."],
-      ["syncConfigFolder", "Sync Obsidian settings folder", "Experimental: sync all of .obsidian. Changes may vary between devices."],
-      ["syncBookmarks", "Sync bookmarks", "Sync .obsidian/bookmarks.json without syncing the rest of .obsidian."]
+      ["syncConfigFolder", "Sync Obsidian configuration folder", `Experimental: sync all of ${this.app.vault.configDir}. Changes may vary between devices.`],
+      ["syncBookmarks", "Sync bookmarks", `Sync ${this.app.vault.configDir}/bookmarks.json without syncing the rest of the configuration folder.`]
     ]) {
       new import_obsidian2.Setting(pathSyncGroup).setName(title).setDesc(description).addToggle((toggle) => toggle.setValue(this.plugin.settings[key]).onChange(async (value) => {
         this.plugin.settings[key] = value;
@@ -11458,7 +11489,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayExport(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Export settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Export and import").setHeading();
     containerEl.createEl("p", { text: "Download all OCloudSync settings as one JSON file. On mobile, the system share sheet lets you save the file to Files or another location." });
     const warning = containerEl.createEl("div", { cls: "ocs-export-warning" });
     warning.createEl("strong", { text: "Sensitive file" });
@@ -11469,22 +11500,24 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
       importButton = button.setButtonText("Import settings file").onClick(() => fileInput.click());
       return importButton;
     });
-    fileInput.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      importButton.setDisabled(true);
-      try {
-        await this.plugin.importSettingsFile(file);
-        new import_obsidian2.Notice("Settings imported. Review the provider, then choose Sync now when ready.");
-        this.display();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.plugin.addLog(`Settings import failed: ${message}`, "ERROR");
-        new import_obsidian2.Notice(`Settings import failed: ${message}`);
-      } finally {
-        fileInput.value = "";
-        if (importSetting.settingEl.isConnected) importButton.setDisabled(false);
-      }
+    fileInput.addEventListener("change", () => {
+      void (async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        importButton.setDisabled(true);
+        try {
+          await this.plugin.importSettingsFile(file);
+          new import_obsidian2.Notice("Settings imported. Review the provider, then choose Sync now when ready.");
+          this.display();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.plugin.addLog(`Settings import failed: ${message}`, "ERROR");
+          new import_obsidian2.Notice(`Settings import failed: ${message}`);
+        } finally {
+          fileInput.value = "";
+          if (importSetting.settingEl.isConnected) importButton.setDisabled(false);
+        }
+      })();
     });
     new import_obsidian2.Setting(containerEl).setName("Settings export").setDesc("Creates one portable JSON file. Sync history and the log are left out.").addButton((button) => button.setButtonText("Export settings file").setCta().onClick(async () => {
       button.setDisabled(true);
@@ -11501,7 +11534,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayProSettings(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Pro settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Advanced").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Encryption format").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Encryption method").setDesc(`Active: ${this.plugin.settings.encryptionMethod === "openssl-aes-cbc" ? "OpenSSL AES-256-CBC" : "AES-256-GCM"}. AES-GCM is recommended. OpenSSL AES-CBC is provided for openssl enc compatibility, but does not authenticate data. Choose a format, then apply it to convert remote files.`).addDropdown((dropdown) => dropdown.addOption("aes-gcm", "AES-256-GCM (recommended)").addOption("openssl-aes-cbc", "OpenSSL AES-256-CBC").setValue(this.plugin.settings.encryptionMethodTarget).onChange(async (value) => {
       this.plugin.settings.encryptionMethodTarget = value === "openssl-aes-cbc" ? "openssl-aes-cbc" : "aes-gcm";
@@ -11556,7 +11589,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayWebDavSettings(containerEl) {
-    new import_obsidian2.Setting(containerEl).setName("Main settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("WebDAV connection").setHeading();
     new import_obsidian2.Setting(containerEl).setName("WebDAV server URL").setDesc("Use HTTPS, for example https://cloud.example.com/remote.php/dav/files/user/").addText(
       (text2) => text2.setPlaceholder("https://cloud.example.com/remote.php/dav/files/user/").setValue(this.plugin.settings.webdavUrl).onChange(async (value) => {
         const nextUrl = value.trim();

@@ -8,6 +8,12 @@ const OPENSSL_PATH_PREFIX = "~ossl~";
 const OPENSSL_ITERATIONS = 20_000;
 let pathKeys: { password: string; enc: CryptoKey; mac: CryptoKey } | undefined;
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 function webCrypto(): Crypto {
   if (!window.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
   return window.crypto;
@@ -16,7 +22,7 @@ function webCrypto(): Crypto {
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
   const crypto = webCrypto();
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  const saltBuffer = toArrayBuffer(salt);
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: ITERATIONS },
     material,
@@ -44,7 +50,7 @@ async function encryptOpenSsl(data: ArrayBuffer, password: string): Promise<Arra
   const crypto = webCrypto();
   const salt = crypto.getRandomValues(new Uint8Array(8));
   const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  const saltBuffer = toArrayBuffer(salt);
   const derived = new Uint8Array(await crypto.subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: OPENSSL_ITERATIONS },
     material,
@@ -68,7 +74,7 @@ async function decryptOpenSsl(data: Uint8Array, password: string): Promise<Array
   }
   const salt = data.slice(OPENSSL_MAGIC.length, headerLength);
   const material = await webCrypto().subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
+  const saltBuffer = toArrayBuffer(salt);
   const derived = new Uint8Array(await webCrypto().subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: saltBuffer, iterations: OPENSSL_ITERATIONS },
     material,
@@ -143,7 +149,7 @@ export async function encryptPath(path: string, password: string, method: "aes-g
     return (await Promise.all(path.split("/").map(async (part) => {
       if (!part) return part;
       const plain = new TextEncoder().encode(part);
-      const encrypted = await encryptOpenSsl(plain.buffer.slice(plain.byteOffset, plain.byteOffset + plain.byteLength) as ArrayBuffer, password);
+      const encrypted = await encryptOpenSsl(toArrayBuffer(plain), password);
       return `${OPENSSL_PATH_PREFIX}${toBase64Url(new Uint8Array(encrypted))}`;
     }))).join("/");
   }
@@ -154,8 +160,8 @@ export async function encryptPath(path: string, password: string, method: "aes-g
     const iv = await pathIv(part, mac);
     const encoded = new TextEncoder().encode(part);
     const cipher = new Uint8Array(await webCrypto().subtle.encrypt(
-      { name: "AES-GCM", iv: iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer }, enc,
-      encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer
+      { name: "AES-GCM", iv: toArrayBuffer(iv) }, enc,
+      toArrayBuffer(encoded)
     ));
     const output = new Uint8Array(iv.length + cipher.length);
     output.set(iv);

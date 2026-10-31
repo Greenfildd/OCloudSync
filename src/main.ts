@@ -13,6 +13,12 @@ import { decryptFile, decryptPath, encryptFileWithMethod, encryptPath } from "./
 import { createCrdtSeed, mergeCrdtText } from "./crdt";
 import { DEFAULT_SETTINGS, type PluginSettings } from "./types";
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 export default class MyCloudSyncPlugin extends Plugin {
   settings!: PluginSettings;
   private isSyncing = false;
@@ -29,7 +35,7 @@ export default class MyCloudSyncPlugin extends Plugin {
   private logTextArea?: HTMLTextAreaElement;
 
   async onload(): Promise<void> {
-    const stored = await this.loadData();
+    const stored: unknown = await this.loadData();
     const saved =
       stored && typeof stored === "object"
         ? (stored as Partial<PluginSettings>)
@@ -434,7 +440,7 @@ export default class MyCloudSyncPlugin extends Plugin {
           await writeRemoteData(updatePath, merged.update, Date.now());
         }
         const mergedBytes = new TextEncoder().encode(merged.text);
-        const mergedBuffer = mergedBytes.buffer.slice(mergedBytes.byteOffset, mergedBytes.byteOffset + mergedBytes.byteLength) as ArrayBuffer;
+        const mergedBuffer = toArrayBuffer(mergedBytes);
         if (merged.text !== localText) await this.writeLocal(path, mergedBuffer);
         const remoteText = new TextDecoder("utf-8", { fatal: true }).decode(await readRemoteData(path));
         if (merged.text !== remoteText) await writeRemoteData(path, mergedBuffer, Date.now());
@@ -703,7 +709,7 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
       return;
     }
 
-    new Setting(containerEl).setName("Main settings").setHeading();
+    new Setting(containerEl).setName("General").setHeading();
 
     new Setting(containerEl)
       .setName("Cloud provider")
@@ -817,8 +823,8 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
 
     for (const [key, title, description] of [
       ["includeUnderscorePaths", "Sync underscore paths", "Include files and folders whose names start with underscore."],
-      ["syncConfigFolder", "Sync Obsidian settings folder", "Experimental: sync all of .obsidian. Changes may vary between devices."],
-      ["syncBookmarks", "Sync bookmarks", "Sync .obsidian/bookmarks.json without syncing the rest of .obsidian."],
+      ["syncConfigFolder", "Sync Obsidian configuration folder", `Experimental: sync all of ${this.app.vault.configDir}. Changes may vary between devices.`],
+      ["syncBookmarks", "Sync bookmarks", `Sync ${this.app.vault.configDir}/bookmarks.json without syncing the rest of the configuration folder.`],
     ] as const) {
       new Setting(pathSyncGroup)
         .setName(title)
@@ -963,7 +969,7 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
   }
 
   private displayExport(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Export settings").setHeading();
+    new Setting(containerEl).setName("Export and import").setHeading();
     containerEl.createEl("p", { text: "Download all OCloudSync settings as one JSON file. On mobile, the system share sheet lets you save the file to Files or another location." });
     const warning = containerEl.createEl("div", { cls: "ocs-export-warning" });
     warning.createEl("strong", { text: "Sensitive file" });
@@ -977,22 +983,24 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
         importButton = button.setButtonText("Import settings file").onClick(() => fileInput.click());
         return importButton;
       });
-    fileInput.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      importButton.setDisabled(true);
-      try {
-        await this.plugin.importSettingsFile(file);
-        new Notice("Settings imported. Review the provider, then choose Sync now when ready.");
-        this.display();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.plugin.addLog(`Settings import failed: ${message}`, "ERROR");
-        new Notice(`Settings import failed: ${message}`);
-      } finally {
-        fileInput.value = "";
-        if (importSetting.settingEl.isConnected) importButton.setDisabled(false);
-      }
+    fileInput.addEventListener("change", () => {
+      void (async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        importButton.setDisabled(true);
+        try {
+          await this.plugin.importSettingsFile(file);
+          new Notice("Settings imported. Review the provider, then choose Sync now when ready.");
+          this.display();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.plugin.addLog(`Settings import failed: ${message}`, "ERROR");
+          new Notice(`Settings import failed: ${message}`);
+        } finally {
+          fileInput.value = "";
+          if (importSetting.settingEl.isConnected) importButton.setDisabled(false);
+        }
+      })();
     });
     new Setting(containerEl)
       .setName("Settings export")
@@ -1016,7 +1024,7 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
   }
 
   private displayProSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Pro settings").setHeading();
+    new Setting(containerEl).setName("Advanced").setHeading();
     new Setting(containerEl).setName("Encryption format").setHeading();
     new Setting(containerEl)
       .setName("Encryption method")
@@ -1112,7 +1120,7 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
   }
 
   private displayWebDavSettings(containerEl: HTMLElement): void {
-    new Setting(containerEl).setName("Main settings").setHeading();
+    new Setting(containerEl).setName("WebDAV connection").setHeading();
     new Setting(containerEl)
       .setName("WebDAV server URL")
       .setDesc("Use HTTPS, for example https://cloud.example.com/remote.php/dav/files/user/")
