@@ -4,6 +4,30 @@
   gap: 6px;
 }
 
+.ocs-settings-group {
+  margin: 12px 0;
+  padding: 16px;
+  border-radius: var(--radius-m);
+  background-color: var(--background-secondary);
+}
+
+.ocs-hidden-download,
+.ocs-hidden-file-input {
+  display: none;
+}
+
+.ocs-device-code {
+  font-size: 1.5em;
+  text-align: center;
+}
+
+.ocs-log-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  white-space: pre;
+}
+
 .ocs-page-nav .setting-item-control > button {
   flex: 1 1 0;
   min-width: 0;

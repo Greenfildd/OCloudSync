@@ -1062,9 +1062,7 @@ class DeviceCodeModal extends Modal {
   onOpen(): void {
     this.contentEl.createEl("h2", { text: "Connect OneDrive" });
     this.contentEl.createEl("p", { text: "Open Microsoft sign-in, enter this code, and approve access. Keep Obsidian open while it waits for confirmation." });
-    const code = this.contentEl.createEl("pre", { text: this.userCode });
-    code.style.fontSize = "1.5em";
-    code.style.textAlign = "center";
+    this.contentEl.createEl("pre", { text: this.userCode, cls: "ocs-device-code" });
     new Setting(this.contentEl).addButton((button) => button.setButtonText("Open Microsoft sign-in").setCta().onClick(() => window.open(this.verificationUri)));
     new Setting(this.contentEl).addButton((button) => button.setButtonText("Close").onClick(() => this.close()));
   }

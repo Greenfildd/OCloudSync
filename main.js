@@ -971,9 +971,7 @@ var DeviceCodeModal = class extends import_obsidian.Modal {
   onOpen() {
     this.contentEl.createEl("h2", { text: "Connect OneDrive" });
     this.contentEl.createEl("p", { text: "Open Microsoft sign-in, enter this code, and approve access. Keep Obsidian open while it waits for confirmation." });
-    const code = this.contentEl.createEl("pre", { text: this.userCode });
-    code.style.fontSize = "1.5em";
-    code.style.textAlign = "center";
+    this.contentEl.createEl("pre", { text: this.userCode, cls: "ocs-device-code" });
     new import_obsidian.Setting(this.contentEl).addButton((button) => button.setButtonText("Open Microsoft sign-in").setCta().onClick(() => window.open(this.verificationUri)));
     new import_obsidian.Setting(this.contentEl).addButton((button) => button.setButtonText("Close").onClick(() => this.close()));
   }
@@ -1994,8 +1992,8 @@ var OPENSSL_PATH_PREFIX = "~ossl~";
 var OPENSSL_ITERATIONS = 2e4;
 var pathKeys;
 function webCrypto() {
-  if (!globalThis.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
-  return globalThis.crypto;
+  if (!window.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
+  return window.crypto;
 }
 async function deriveKey(password, salt) {
   const crypto2 = webCrypto();
@@ -10775,10 +10773,10 @@ var MyCloudSyncPlugin = class extends import_obsidian2.Plugin {
       await navigator.share({ files: [file], title: "OCloudSync settings export" });
     } else {
       const url = URL.createObjectURL(file);
-      const anchor = document.createElement("a");
+      const anchor = document.body.createEl("a");
       anchor.href = url;
       anchor.download = fileName;
-      anchor.style.display = "none";
+      anchor.addClass("ocs-hidden-download");
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -10871,8 +10869,9 @@ var MyCloudSyncPlugin = class extends import_obsidian2.Plugin {
   }
   shouldSync(path, size2) {
     if (path.startsWith(".trash/") || path === ".trash") return false;
-    if (path === ".obsidian/bookmarks.json") return this.settings.syncBookmarks;
-    if (path.startsWith(".obsidian/") || path === ".obsidian") return this.settings.syncConfigFolder;
+    const configDir = this.app.vault.configDir;
+    if (path === `${configDir}/bookmarks.json`) return this.settings.syncBookmarks;
+    if (path.startsWith(`${configDir}/`) || path === configDir) return this.settings.syncConfigFolder;
     if (path.split("/").some((part) => part.startsWith("."))) return false;
     if (!this.settings.includeUnderscorePaths && path.split("/").some((part) => part.startsWith("_"))) return false;
     const limit = this.settings.maxFileSizeMb * 1024 * 1024;
@@ -11075,7 +11074,7 @@ var MyCloudSyncPlugin = class extends import_obsidian2.Plugin {
         deleteRemoteData,
         async (path) => {
           const file = this.app.vault.getAbstractFileByPath(path);
-          if (file instanceof import_obsidian2.TFile) await this.app.vault.trash(file, this.settings.syncDeleteLocation === "system");
+          if (file instanceof import_obsidian2.TFile) await this.app.fileManager.trashFile(file);
         },
         this.settings.syncDeletions,
         () => this.cancelSyncRequested,
@@ -11250,13 +11249,11 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     containerEl.addClass("ocs-settings");
     this.plugin.setLogView();
     containerEl.empty();
-    containerEl.createEl("h2", { text: this.plugin.manifest.name });
+    new import_obsidian2.Setting(containerEl).setName(this.plugin.manifest.name).setHeading();
     const pageNav = new import_obsidian2.Setting(containerEl);
     pageNav.settingEl.addClass("ocs-page-nav");
     pageNav.infoEl.hide();
-    pageNav.controlEl.style.width = "100%";
-    pageNav.controlEl.style.justifyContent = "center";
-    pageNav.controlEl.style.gap = "8px";
+    pageNav.settingEl.addClass("ocs-page-nav");
     pageNav.addButton((button) => {
       button.setButtonText("Main");
       if (this.currentPage === "main") button.setCta();
@@ -11302,7 +11299,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.displayExport(containerEl);
       return;
     }
-    containerEl.createEl("h3", { text: "Main settings" });
+    new import_obsidian2.Setting(containerEl).setName("Main settings").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Cloud provider").setDesc("Choose a connected cloud service for this vault.").addDropdown(
       (dropdown) => dropdown.addOption("webdav", "WebDAV (Nextcloud, ownCloud, etc.)").addOption("google-drive", "Google Drive").addOption("s3", "S3-compatible storage (AWS, Cloudflare R2, MinIO, etc.)").addOption("azure-blob", "Azure Blob Storage").addOption("dropbox", "Dropbox").addOption("onedrive", "OneDrive Personal (app folder)").addOption("yandex-disk", "Yandex Disk").addOption("pcloud", "pCloud").addOption("webdis", "Webdis (Redis HTTP gateway)").addOption("box", "Box").setValue(this.plugin.settings.provider).onChange(async (value) => {
         if (value !== "webdav" && value !== "google-drive" && value !== "s3" && value !== "azure-blob" && value !== "dropbox" && value !== "onedrive" && value !== "yandex-disk" && value !== "pcloud" && value !== "webdis" && value !== "box") {
@@ -11332,10 +11329,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
       await this.plugin.saveSettings();
     }));
     const scheduledSyncGroup = containerEl.createDiv();
-    scheduledSyncGroup.style.backgroundColor = "var(--background-secondary)";
-    scheduledSyncGroup.style.borderRadius = "var(--radius-m)";
-    scheduledSyncGroup.style.padding = "16px";
-    scheduledSyncGroup.style.margin = "12px 0";
+    scheduledSyncGroup.addClass("ocs-settings-group");
     new import_obsidian2.Setting(scheduledSyncGroup).setName("Scheduled sync").setDesc("Run a sync at a regular interval while Obsidian is open.").addToggle((toggle) => toggle.setValue(this.plugin.settings.scheduledSync).onChange(async (enabled) => {
       this.plugin.settings.scheduledSync = enabled;
       this.plugin.refreshScheduledSync();
@@ -11354,10 +11348,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
       await this.plugin.saveSettings();
     }));
     const pathSyncGroup = containerEl.createDiv();
-    pathSyncGroup.style.backgroundColor = "var(--background-secondary)";
-    pathSyncGroup.style.borderRadius = "var(--radius-m)";
-    pathSyncGroup.style.padding = "16px";
-    pathSyncGroup.style.margin = "12px 0";
+    pathSyncGroup.addClass("ocs-settings-group");
     for (const [key, title, description] of [
       ["includeUnderscorePaths", "Sync underscore paths", "Include files and folders whose names start with underscore."],
       ["syncConfigFolder", "Sync Obsidian settings folder", "Experimental: sync all of .obsidian. Changes may vary between devices."],
@@ -11441,13 +11432,10 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   displayLog(containerEl) {
-    containerEl.createEl("h3", { text: "Extension log" });
+    new import_obsidian2.Setting(containerEl).setName("Extension log").setHeading();
     containerEl.createEl("p", { text: "Recent sync activity and errors. The log is stored in this vault's plugin settings and keeps the latest 500 lines." });
     const textarea = containerEl.createEl("textarea", { cls: "ocs-log-textarea", attr: { rows: import_obsidian2.Platform.isMobile ? "14" : "22", readonly: "true", spellcheck: "false" } });
-    textarea.style.width = "100%";
-    textarea.style.resize = "vertical";
-    textarea.style.fontFamily = "var(--font-monospace)";
-    textarea.style.whiteSpace = "pre";
+    textarea.addClass("ocs-log-textarea");
     textarea.value = this.plugin.settings.logText;
     textarea.scrollTop = textarea.scrollHeight;
     this.plugin.setLogView(textarea);
@@ -11470,13 +11458,12 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayExport(containerEl) {
-    containerEl.createEl("h3", { text: "Export settings" });
+    new import_obsidian2.Setting(containerEl).setName("Export settings").setHeading();
     containerEl.createEl("p", { text: "Download all OCloudSync settings as one JSON file. On mobile, the system share sheet lets you save the file to Files or another location." });
     const warning = containerEl.createEl("div", { cls: "ocs-export-warning" });
     warning.createEl("strong", { text: "Sensitive file" });
     warning.createEl("p", { text: "The export includes cloud passwords, OAuth tokens, access keys, and the encryption password. Anyone with this file can access those accounts and data. Store it securely and delete it when you no longer need it." });
-    const fileInput = containerEl.createEl("input", { attr: { type: "file", accept: ".json,application/json" } });
-    fileInput.style.display = "none";
+    const fileInput = containerEl.createEl("input", { cls: "ocs-hidden-file-input", attr: { type: "file", accept: ".json,application/json" } });
     let importButton;
     const importSetting = new import_obsidian2.Setting(containerEl).setName("Settings import").setDesc("Choose an OCloudSync JSON export. Sync history will be reset so the next sync can compare files afresh.").addButton((button) => {
       importButton = button.setButtonText("Import settings file").onClick(() => fileInput.click());
@@ -11514,8 +11501,8 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayProSettings(containerEl) {
-    containerEl.createEl("h3", { text: "Pro settings" });
-    containerEl.createEl("h4", { text: "Encryption format" });
+    new import_obsidian2.Setting(containerEl).setName("Pro settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Encryption format").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Encryption method").setDesc(`Active: ${this.plugin.settings.encryptionMethod === "openssl-aes-cbc" ? "OpenSSL AES-256-CBC" : "AES-256-GCM"}. AES-GCM is recommended. OpenSSL AES-CBC is provided for openssl enc compatibility, but does not authenticate data. Choose a format, then apply it to convert remote files.`).addDropdown((dropdown) => dropdown.addOption("aes-gcm", "AES-256-GCM (recommended)").addOption("openssl-aes-cbc", "OpenSSL AES-256-CBC").setValue(this.plugin.settings.encryptionMethodTarget).onChange(async (value) => {
       this.plugin.settings.encryptionMethodTarget = value === "openssl-aes-cbc" ? "openssl-aes-cbc" : "aes-gcm";
       await this.plugin.saveSettings();
@@ -11569,7 +11556,7 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     }));
   }
   displayWebDavSettings(containerEl) {
-    containerEl.createEl("h3", { text: "Main settings" });
+    new import_obsidian2.Setting(containerEl).setName("Main settings").setHeading();
     new import_obsidian2.Setting(containerEl).setName("WebDAV server URL").setDesc("Use HTTPS, for example https://cloud.example.com/remote.php/dav/files/user/").addText(
       (text2) => text2.setPlaceholder("https://cloud.example.com/remote.php/dav/files/user/").setValue(this.plugin.settings.webdavUrl).onChange(async (value) => {
         const nextUrl = value.trim();

@@ -9,8 +9,8 @@ const OPENSSL_ITERATIONS = 20_000;
 let pathKeys: { password: string; enc: CryptoKey; mac: CryptoKey } | undefined;
 
 function webCrypto(): Crypto {
-  if (!globalThis.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
-  return globalThis.crypto;
+  if (!window.crypto?.subtle) throw new Error("Web Crypto is unavailable in this Obsidian environment.");
+  return window.crypto;
 }
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {

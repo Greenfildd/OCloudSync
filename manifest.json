@@ -2,7 +2,9 @@
   "id": "ocloudsync",
   "name": "OCloudSync",
   "version": "0.1.0",
-  "minAppVersion": "1.0.0",
+  "minAppVersion": "1.7.2",
   "description": "Synchronize vault files with WebDAV, Google Drive, S3, Azure Blob, Dropbox, Box, pCloud, Yandex Disk, Webdis, or OneDrive.",
+  "author": "Greenfildd",
+  "authorUrl": "https://github.com/Greenfildd/OCloudSync",
   "isDesktopOnly": false
 }
