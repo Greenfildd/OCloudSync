@@ -1,0 +1,2 @@
+# OCloudSync
+Extension for obsidian
