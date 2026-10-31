@@ -124,7 +124,7 @@ export async function synchronize(
   ) => Promise<void>,
   writeLocal: (path: string, data: ArrayBuffer) => Promise<void>,
   refresh: () => Promise<{ localFiles: LocalFile[]; remoteFiles: FileEntry[] }>,
-  conflictAction: "keep-newer" | "keep-larger" | "keep-both" | "merge-markdown" | "crdt" = "keep-newer",
+  conflictAction: "keep-newer" | "keep-larger" | "keep-both" | "merge-markdown" | "crdt" | "prefer-local" = "keep-newer",
   deleteRemote?: (path: string) => Promise<void>,
   deleteLocal?: (path: string) => Promise<void>,
   syncDeletions = true,
@@ -222,6 +222,11 @@ export async function synchronize(
       }
       if (conflictAction === "merge-markdown" && await tryMergeMarkdown(path, baseline[path]?.baseContent)) return;
       if (conflictAction === "merge-markdown") { await preserveBoth(path); return; }
+      if (conflictAction === "prefer-local") {
+        await writeRemote(path, await readLocal(path), local.mtime);
+        result.uploaded++;
+        return;
+      }
       if (conflictAction === "keep-both") {
         await preserveBoth(path);
         return;
@@ -241,6 +246,9 @@ export async function synchronize(
       } else if (remoteChanged && !localChanged) {
         await writeLocal(path, await readRemote(path));
         result.downloaded++;
+      } else if (conflictAction === "prefer-local") {
+        await writeRemote(path, await readLocal(path), local.mtime);
+        result.uploaded++;
       } else if (conflictAction === "keep-larger" && local.size !== remote.size) {
         if (local.size > remote.size) {
           await writeRemote(path, await readLocal(path), local.mtime);
@@ -268,7 +276,10 @@ export async function synchronize(
       return;
     }
 
-    if (conflictAction === "keep-both") {
+    if (conflictAction === "prefer-local") {
+      await writeRemote(path, await readLocal(path), local.mtime);
+      result.uploaded++;
+    } else if (conflictAction === "keep-both") {
       await preserveBoth(path);
     } else if (local.mtime > remote.mtime) {
       await writeRemote(path, await readLocal(path), local.mtime);

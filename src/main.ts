@@ -59,7 +59,8 @@ export default class MyCloudSyncPlugin extends Plugin {
       includeUnderscorePaths: saved.includeUnderscorePaths === true,
       syncConfigFolder: saved.syncConfigFolder === true,
       syncBookmarks: saved.syncBookmarks === true,
-      conflictAction: saved.conflictAction === "keep-larger" || saved.conflictAction === "keep-both" || saved.conflictAction === "merge-markdown" || saved.conflictAction === "crdt" ? saved.conflictAction : "keep-newer",
+      conflictAction: saved.conflictAction === "keep-larger" || saved.conflictAction === "keep-both" || saved.conflictAction === "merge-markdown" || saved.conflictAction === "crdt" || saved.conflictAction === "prefer-local" ? saved.conflictAction : "keep-newer",
+      deviceId: typeof saved.deviceId === "string" && saved.deviceId ? saved.deviceId : crypto.randomUUID(),
       oneDriveFullAccess: saved.oneDriveFullAccess === true,
       encryptionPassword: typeof saved.encryptionPassword === "string" ? saved.encryptionPassword : "",
       encryptionMethod: saved.encryptionMethod === "openssl-aes-cbc" ? "openssl-aes-cbc" : "aes-gcm",
@@ -121,6 +122,7 @@ export default class MyCloudSyncPlugin extends Plugin {
       exportedAt: new Date().toISOString(),
       settings: {
         ...this.settings,
+        deviceId: "",
         baseline: {},
         logText: "",
         syncRecoveryPending: false,
@@ -162,15 +164,16 @@ export default class MyCloudSyncPlugin extends Plugin {
     const imported = { ...DEFAULT_SETTINGS };
     const target = imported as unknown as Record<string, unknown>;
     for (const [key, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
-      if (["baseline", "logText", "syncRecoveryPending"].includes(key)) continue;
+      if (["baseline", "logText", "syncRecoveryPending", "deviceId"].includes(key)) continue;
       const value = source[key];
       if (typeof defaultValue === "string" && typeof value === "string") target[key] = value;
       else if (typeof defaultValue === "number" && typeof value === "number" && Number.isFinite(value)) target[key] = value;
       else if (typeof defaultValue === "boolean" && typeof value === "boolean") target[key] = value;
     }
     const providers = ["webdav", "google-drive", "s3", "azure-blob", "dropbox", "onedrive", "yandex-disk", "pcloud", "webdis", "box"];
-    const conflictActions = ["keep-newer", "keep-larger", "keep-both", "merge-markdown", "crdt"];
+    const conflictActions = ["keep-newer", "keep-larger", "keep-both", "merge-markdown", "crdt", "prefer-local"];
     imported.provider = providers.includes(String(source.provider)) ? source.provider as PluginSettings["provider"] : DEFAULT_SETTINGS.provider;
+    imported.deviceId = this.settings.deviceId;
     imported.conflictAction = conflictActions.includes(String(source.conflictAction)) ? source.conflictAction as PluginSettings["conflictAction"] : DEFAULT_SETTINGS.conflictAction;
     imported.encryptionMethod = source.encryptionMethod === "openssl-aes-cbc" ? "openssl-aes-cbc" : "aes-gcm";
     imported.encryptionMethodTarget = source.encryptionMethodTarget === "openssl-aes-cbc" ? "openssl-aes-cbc" : "aes-gcm";
@@ -383,6 +386,34 @@ export default class MyCloudSyncPlugin extends Plugin {
       const deleteRemoteData = async (path: string) => provider.delete(existingRemotePaths.get(path) ?? await remotePath(path));
       const localFiles = await this.getLocalFiles();
       const allRemoteFiles = await listRemote();
+      if (this.settings.conflictAction === "prefer-local") {
+        const primaryPath = ".ocs-system/primary-device.json";
+        const markerExists = allRemoteFiles.some((file) => file.path === primaryPath);
+        let primary: { deviceId?: unknown } | undefined;
+        if (markerExists) {
+          try {
+            const remoteData = await provider.read(await remotePath(primaryPath));
+            const markerData = password ? await decryptFile(remoteData, password) : remoteData;
+            primary = JSON.parse(new TextDecoder().decode(markerData)) as { deviceId?: unknown };
+          } catch {
+            throw new Error("Cannot verify the primary device marker. Resolve the cloud marker before using Prefer this device.");
+          }
+          if (primary.deviceId !== this.settings.deviceId) {
+            throw new Error("Another device is already designated as primary. Only that device may use Prefer this device.");
+          }
+        } else {
+          const marker = new TextEncoder().encode(JSON.stringify({ deviceId: this.settings.deviceId, claimedAt: Date.now() }));
+          const markerBuffer = toArrayBuffer(marker);
+          const encryptedMarker = password ? await encryptFileWithMethod(markerBuffer, password, this.settings.encryptionMethod) : markerBuffer;
+          await provider.write(await remotePath(primaryPath), encryptedMarker, Date.now());
+          const verificationData = await provider.read(await remotePath(primaryPath));
+          const plainVerification = password ? await decryptFile(verificationData, password) : verificationData;
+          primary = JSON.parse(new TextDecoder().decode(plainVerification)) as { deviceId?: unknown };
+          if (primary.deviceId !== this.settings.deviceId) {
+            throw new Error("Another device claimed primary status at the same time. This device is not primary.");
+          }
+        }
+      }
       const remoteFiles = allRemoteFiles.filter((file) => this.shouldSync(file.path, file.size));
       this.addLog(`Found ${localFiles.length} local and ${remoteFiles.length} remote files to compare.`);
       const localByPath = new Map(localFiles.map((file) => [file.path, file]));
@@ -846,9 +877,10 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
         .addOption("keep-both", "Keep both copies")
         .addOption("merge-markdown", "Merge Markdown; keep both if edits overlap")
         .addOption("crdt", "CRDT merge (Markdown)")
+        .addOption("prefer-local", "Prefer this device (local changes win)")
         .setValue(this.plugin.settings.conflictAction)
         .onChange(async (value) => {
-          if (value === "keep-newer" || value === "keep-larger" || value === "keep-both" || value === "merge-markdown" || value === "crdt") {
+          if (value === "keep-newer" || value === "keep-larger" || value === "keep-both" || value === "merge-markdown" || value === "crdt" || value === "prefer-local") {
             this.plugin.settings.conflictAction = value;
             await this.plugin.saveSettings();
           }

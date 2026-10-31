@@ -75,7 +75,8 @@ export interface PluginSettings {
   includeUnderscorePaths: boolean;
   syncConfigFolder: boolean;
   syncBookmarks: boolean;
-  conflictAction: "keep-newer" | "keep-larger" | "keep-both" | "merge-markdown" | "crdt";
+  conflictAction: "keep-newer" | "keep-larger" | "keep-both" | "merge-markdown" | "crdt" | "prefer-local";
+  deviceId: string;
   encryptionPassword: string;
   encryptionMethod: EncryptionMethod;
   encryptionMethodTarget: EncryptionMethod;
@@ -137,6 +138,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   syncConfigFolder: false,
   syncBookmarks: false,
   conflictAction: "keep-newer",
+  deviceId: "",
   encryptionPassword: "",
   encryptionMethod: "aes-gcm",
   encryptionMethodTarget: "aes-gcm",
