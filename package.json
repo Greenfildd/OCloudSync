@@ -1,0 +1,21 @@
+{
+  "name": "OCloudSync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An Obsidian plugin for synchronizing vaults with cloud storage",
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/main.ts --bundle --outfile=main.js --external:obsidian --external:http --format=cjs --platform=browser --target=es2020",
+    "dev": "esbuild src/main.ts --bundle --outfile=main.js --external:obsidian --external:http --format=cjs --platform=browser --target=es2020 --watch",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.7.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "yjs": "^13.6.33"
+  }
+}
