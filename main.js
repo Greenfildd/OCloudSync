@@ -11515,15 +11515,10 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.plugin.setLogView(textarea);
     const actions = new import_obsidian2.Setting(containerEl);
     actions.infoEl.hide();
-    actions.addButton((button) => button.setButtonText("Copy log").onClick(async () => {
-      try {
-        await navigator.clipboard.writeText(this.plugin.settings.logText);
-        new import_obsidian2.Notice("Log copied.");
-      } catch {
-        textarea.focus();
-        textarea.select();
-        new import_obsidian2.Notice("Select and copy the log manually.");
-      }
+    actions.addButton((button) => button.setButtonText("Select log").onClick(() => {
+      textarea.focus();
+      textarea.select();
+      new import_obsidian2.Notice("Log selected. Use your device's copy command.");
     })).addButton((button) => button.setButtonText("Clear log").onClick(async () => {
       this.plugin.settings.logText = "";
       textarea.value = "";

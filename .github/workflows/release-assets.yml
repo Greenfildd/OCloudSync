@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   assets:
@@ -19,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,8 +32,21 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: test "v$(node -p 'require("./manifest.json").version')" = "$RELEASE_TAG"
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            main.js
+            styles.css
       - name: Upload Obsidian plugin files
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
-        run: gh release upload "$RELEASE_TAG" main.js manifest.json --clobber
+        run: |
+          gh release upload "$RELEASE_TAG" main.js manifest.json styles.css --clobber
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | while IFS= read -r asset; do
+            case "$asset" in
+              main.js|manifest.json|styles.css) ;;
+              *) gh release delete-asset "$RELEASE_TAG" "$asset" --yes ;;
+            esac
+          done

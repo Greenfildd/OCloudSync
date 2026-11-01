@@ -982,15 +982,10 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
     const actions = new Setting(containerEl);
     actions.infoEl.hide();
     actions
-      .addButton((button) => button.setButtonText("Copy log").onClick(async () => {
-        try {
-          await navigator.clipboard.writeText(this.plugin.settings.logText);
-          new Notice("Log copied.");
-        } catch {
-          textarea.focus();
-          textarea.select();
-          new Notice("Select and copy the log manually.");
-        }
+      .addButton((button) => button.setButtonText("Select log").onClick(() => {
+        textarea.focus();
+        textarea.select();
+        new Notice("Log selected. Use your device's copy command.");
       }))
       .addButton((button) => button.setButtonText("Clear log").onClick(async () => {
         this.plugin.settings.logText = "";
