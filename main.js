@@ -1619,9 +1619,9 @@ async function connectGoogleDrive(settings) {
           response2.writeHead(500).end("OAuth callback server error.");
           return;
         }
-        const redirectUri2 = `http://127.0.0.1:${address.port}/oauth2callback`;
+        const redirectUri2 = `http://127.0.0.1:${address.port}`;
         const callback = new URL(request.url ?? "/", redirectUri2);
-        if (callback.pathname !== "/oauth2callback") {
+        if (callback.pathname !== "/") {
           response2.writeHead(404).end("Not found.");
           return;
         }
@@ -1672,7 +1672,7 @@ async function connectGoogleDrive(settings) {
           reject(new Error("Could not start the local Google sign-in callback."));
           return;
         }
-        const redirectUri2 = `http://127.0.0.1:${address.port}/oauth2callback`;
+        const redirectUri2 = `http://127.0.0.1:${address.port}`;
         const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
         authUrl.search = new URLSearchParams({
           client_id: settings.googleClientId.trim(),
@@ -11695,7 +11695,12 @@ var MyCloudSyncSettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   displayDropboxSettings(containerEl) {
-    containerEl.createEl("p", { text: `Create a Dropbox scoped app and enable account_info.read, files.metadata.read, files.content.read, and files.content.write. Enter the app key once. ${import_obsidian2.Platform.isMobile ? "On mobile, sign in in the browser and paste the one-time code into the prompt." : "Add redirect URI http://localhost:53683/dropbox-callback, then sign in in the browser and return automatically."}` });
+    containerEl.createEl("p", {
+      text: this.plugin.settings.dropboxAppKey ? this.plugin.settings.dropboxRefreshToken ? "Dropbox is connected. Reconnect any time with one click." : "Connect your Dropbox account with one click." : "First, create a Dropbox app and paste its app key below. You only need to do this once."
+    });
+    if (!this.plugin.settings.dropboxAppKey) {
+      new import_obsidian2.Setting(containerEl).setName("One-time setup").setDesc(`In Dropbox, create a Scoped access app with Full Dropbox access. Enable account_info.read, files.metadata.read, files.content.read, and files.content.write.${import_obsidian2.Platform.isMobile ? "" : " Add redirect URI http://localhost:53683/dropbox-callback."}`).addButton((button) => button.setButtonText("Create Dropbox app").setCta().onClick(() => window.open("https://www.dropbox.com/developers/apps/create")));
+    }
     new import_obsidian2.Setting(containerEl).setName("Dropbox app key").addText((text2) => text2.setPlaceholder("Dropbox app key").setValue(this.plugin.settings.dropboxAppKey).onChange(async (value) => {
       this.plugin.settings.dropboxAppKey = value.trim();
       await this.plugin.saveSettings();

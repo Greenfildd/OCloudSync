@@ -1237,7 +1237,19 @@ class MyCloudSyncSettingTab extends PluginSettingTab {
   }
 
   private displayDropboxSettings(containerEl: HTMLElement): void {
-    containerEl.createEl("p", { text: `Create a Dropbox scoped app and enable account_info.read, files.metadata.read, files.content.read, and files.content.write. Enter the app key once. ${Platform.isMobile ? "On mobile, sign in in the browser and paste the one-time code into the prompt." : "Add redirect URI http://localhost:53683/dropbox-callback, then sign in in the browser and return automatically."}` });
+    containerEl.createEl("p", { text: this.plugin.settings.dropboxAppKey
+      ? (this.plugin.settings.dropboxRefreshToken ? "Dropbox is connected. Reconnect any time with one click." : "Connect your Dropbox account with one click.")
+      : "First, create a Dropbox app and paste its app key below. You only need to do this once.",
+    });
+    if (!this.plugin.settings.dropboxAppKey) {
+      new Setting(containerEl)
+        .setName("One-time setup")
+        .setDesc(`In Dropbox, create a Scoped access app with Full Dropbox access. Enable account_info.read, files.metadata.read, files.content.read, and files.content.write.${Platform.isMobile ? "" : " Add redirect URI http://localhost:53683/dropbox-callback."}`)
+        .addButton((button) => button
+          .setButtonText("Create Dropbox app")
+          .setCta()
+          .onClick(() => window.open("https://www.dropbox.com/developers/apps/create")));
+    }
     new Setting(containerEl)
       .setName("Dropbox app key")
       .addText((text) => text

@@ -1723,9 +1723,9 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
           response.writeHead(500).end("OAuth callback server error.");
           return;
         }
-        const redirectUri = `http://127.0.0.1:${address.port}/oauth2callback`;
+        const redirectUri = `http://127.0.0.1:${address.port}`;
         const callback = new URL(request.url ?? "/", redirectUri);
-        if (callback.pathname !== "/oauth2callback") {
+        if (callback.pathname !== "/") {
           response.writeHead(404).end("Not found.");
           return;
         }
@@ -1776,7 +1776,7 @@ export async function connectGoogleDrive(settings: PluginSettings): Promise<void
           reject(new Error("Could not start the local Google sign-in callback."));
           return;
         }
-        const redirectUri = `http://127.0.0.1:${address.port}/oauth2callback`;
+        const redirectUri = `http://127.0.0.1:${address.port}`;
         const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
         authUrl.search = new URLSearchParams({
           client_id: settings.googleClientId.trim(),
