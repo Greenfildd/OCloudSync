@@ -386,6 +386,32 @@ export default class MyCloudSyncPlugin extends Plugin {
       const deleteRemoteData = async (path: string) => provider.delete(existingRemotePaths.get(path) ?? await remotePath(path));
       const localFiles = await this.getLocalFiles();
       const allRemoteFiles = await listRemote();
+      // A durable cloud marker lets another device distinguish a complete
+      // vault from a listing left behind by an interrupted upload/download.
+      const syncStatePath = ".ocs-system/sync-state.json";
+      const syncStateRemotePath = await remotePath(syncStatePath);
+      const existingSyncState = allRemoteFiles.find((file) => file.path === syncStatePath);
+      if (existingSyncState) {
+        try {
+          const encoded = await provider.read(existingRemotePaths.get(syncStatePath) ?? syncStateRemotePath);
+          const plain = password ? await decryptFile(encoded, password) : encoded;
+          const state = JSON.parse(new TextDecoder().decode(plain)) as { status?: unknown; deviceId?: unknown };
+          if (state.status === "in-progress" && state.deviceId !== this.settings.deviceId) {
+            throw new Error("SYNC_INCOMPLETE_REMOTE");
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message === "SYNC_INCOMPLETE_REMOTE") throw error;
+          throw new Error("Cannot verify the cloud sync state. Resolve .ocs-system/sync-state.json before syncing.");
+        }
+      }
+      const writeSyncState = async (status: "in-progress" | "complete") => {
+        const data = toArrayBuffer(new TextEncoder().encode(JSON.stringify({
+          status,
+          deviceId: this.settings.deviceId,
+          updatedAt: Date.now(),
+        })));
+        await provider.write(syncStateRemotePath, password ? await encryptFileWithMethod(data, password, this.settings.encryptionMethod) : data, Date.now());
+      };
       if (this.settings.conflictAction === "prefer-local") {
         const primaryPath = ".ocs-system/primary-device.json";
         const markerExists = allRemoteFiles.some((file) => file.path === primaryPath);
@@ -439,6 +465,7 @@ export default class MyCloudSyncPlugin extends Plugin {
         });
         if (!confirmed) throw new Error("SYNC_PROTECTED");
       }
+      await writeSyncState("in-progress");
       const crdtPrefix = async (path: string) => {
         const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path)));
         let binary = "";
@@ -521,6 +548,7 @@ export default class MyCloudSyncPlugin extends Plugin {
           await writeRemoteData(`${prefix}${crypto.randomUUID()}.yjs`, createCrdtSeed(text), Date.now());
         }
       }
+      await writeSyncState("complete");
       const conflictSummary = result.conflicts.length
         ? `; conflicts left untouched: ${result.conflicts.join(", ")}`
         : "";
@@ -541,6 +569,11 @@ export default class MyCloudSyncPlugin extends Plugin {
         this.addLog("Sync stopped by the safety check because it could modify or remove many files.", "WARN");
         this.settings.syncRecoveryPending = false;
         new Notice("Sync stopped because it would change many files. Start it manually and confirm to continue.");
+      }
+      else if (message === "SYNC_INCOMPLETE_REMOTE") {
+        this.addLog("Sync stopped because another device left an incomplete cloud sync. Resume and complete sync on that device first.", "WARN");
+        this.settings.syncRecoveryPending = false;
+        new Notice("Cloud sync is incomplete on another device. Complete sync there before syncing here.");
       }
       else {
         this.addLog(`Sync failed: ${message}`, "ERROR");
